@@ -64,12 +64,15 @@ function postItemsPosts( allOrganizations ){
 	// post -> post in an organization
 
 	content.feed.entry.forEach(function(item){
-		postsInfo[ item.gsx$territorio.$t ] = postsInfo[ item.gsx$territorio.$t ] || {};
-		postsInfo[ item.gsx$territorio.$t ][ item.gsx$cargonominal.$t ] = postsInfo[ item.gsx$territorio.$t ][ item.gsx$cargonominal.$t ] || {};  
 
-		postsInfo[ item.gsx$territorio.$t ][ item.gsx$cargonominal.$t ].duracioncargo = item.gsx$duracioncargo.$t;
-		postsInfo[ item.gsx$territorio.$t ][ item.gsx$cargonominal.$t ].cargotipo = item.gsx$cargotipo.$t;
-		postsInfo[ item.gsx$territorio.$t ][ item.gsx$cargonominal.$t ].cargoclase = item.gsx$cargoclase.$t;
+		var cargo = ( item.gsx$cargonominal.$t + ' ' + item.gsx$cargoext.$t ) .trim() ; 
+
+		postsInfo[ item.gsx$territorio.$t ] = postsInfo[ item.gsx$territorio.$t ] || {};
+		postsInfo[ item.gsx$territorio.$t ][ cargo ] = postsInfo[ item.gsx$territorio.$t ][ cargo ] || {};  
+		postsInfo[ item.gsx$territorio.$t ][ cargo ].duracioncargo = item.gsx$duracioncargo.$t;
+		postsInfo[ item.gsx$territorio.$t ][ cargo ].cargotipo = item.gsx$cargotipo.$t;
+		postsInfo[ item.gsx$territorio.$t ][ cargo ].cargoclase = item.gsx$cargoclase.$t;
+		postsInfo[ item.gsx$territorio.$t ][ cargo ].cargonominal = item.gsx$cargonominal.$t;
 
 	});
 
@@ -82,6 +85,7 @@ function postItemsPosts( allOrganizations ){
 				label: cargonominal, 
 				organization_id: organizations[territorio].id, 
 				role: cargonominal, 
+				cargonominal: postsInfo[territorio][cargonominal].cargonominal,
 				duracioncargo: postsInfo[territorio][cargonominal].duracioncargo,
 				cargotipo: postsInfo[territorio][cargonominal].cargotipo,
 				cargoclase: postsInfo[territorio][cargonominal].cargoclase
@@ -90,7 +94,12 @@ function postItemsPosts( allOrganizations ){
 		}
 	}
 
-	toolkit.postItems('posts', postsToPost);
+	var totalItems = postsToPost.length;
+	toolkit.postItems('posts', postsToPost).then(
+		function(){ console.log('done') }, 
+		function(err){ console.log('err', err) }, 
+		function(progress){ totalItems-=1; console.log(totalItems); console.log(progress); }
+		);
 
 }
 
@@ -121,12 +130,15 @@ function postItemsMemberships( allOrganizations, allPosts, allPersons ){
 
 	content.feed.entry.forEach(function(item){
 
+		var cargo = ( item.gsx$cargonominal.$t + ' ' + item.gsx$cargoext.$t ) .trim() ; 
+
 		var membership = {
-			  "label": item.gsx$cargonominal.$t,
-			  "role": item.gsx$cargonominal.$t,
+			  "label": cargo,
+			  "role": cargo,
 			  "person_id": persons[ item.gsx$nombre.$t + " " + item.gsx$apellido.$t].id,
 			  "organization_id": organizations[ item.gsx$territorio.$t ].id,
-			  "post_id": posts[organizations[ item.gsx$territorio.$t ].id][ item.gsx$cargonominal.$t ].id
+			  "post_id": posts[organizations[ item.gsx$territorio.$t ].id][ cargo ].id, 
+			  "cargonominal": item.gsx$cargonominal.$t
 		};
 
 		var startDate = transformDateStr(item.gsx$fechainicio.$t); // || item.gsx$fechainicioyear.$t;
@@ -151,7 +163,12 @@ function postItemsMemberships( allOrganizations, allPosts, allPersons ){
 
 	});
 
-	toolkit.postItems('memberships', membershipsToPost);
+	var totalItems = membershipsToPost.length;
+	toolkit.postItems('memberships', membershipsToPost).then(
+		function(){ console.log('done') }, 
+		function(err){ console.log('err', err) }, 
+		function(progress){ totalItems-=1; console.log(totalItems); console.log(progress); }
+		);
 
 }
 
@@ -179,7 +196,7 @@ function transformDateStr(input){
 function loadAllPersonas(){
 	toolkit.loadAllItems('persons').then(function(personas){ 
 		var p = JSON.stringify(personas);
-		//fs.writeFileSync('persons.json', p);
+		fs.writeFileSync('persons.json', p);
 		console.log('total personas', personas.length)
 	}, function(err){
 		console.log('error', err);
@@ -191,7 +208,7 @@ function loadAllPersonas(){
 function loadAllOrganizations(){
 	toolkit.loadAllItems('organizations').then(function(organizations){ 
 		var p = JSON.stringify(organizations);
-		//fs.writeFileSync('organizations.json', p);
+		fs.writeFileSync('organizations.json', p);
 		console.log('total organizations', organizations.length)
 	});	
 }
@@ -199,10 +216,55 @@ function loadAllOrganizations(){
 function loadAllPosts(){
 	toolkit.loadAllItems('posts').then(function(posts){ 
 		var p = JSON.stringify(posts);
-		//fs.writeFileSync('posts.json', p);
+		fs.writeFileSync('posts.json', p);
 		console.log('total posts', posts.length)
 	});	
 }
 
+//loadAllPosts();
 
- loadAllPersonas();
+ function showCargosExtendidos(){
+ 	var cargosExt = {};
+ 	content.feed.entry.forEach(function(item){
+		cargosExt[ item.gsx$cargoext.$t ] = (cargosExt[ item.gsx$cargoext.$t ] || 0) + 1;
+	});	
+
+	console.log(cargosExt);
+ }
+
+ //showCargosExtendidos();
+
+ function loadAllMemberships(){
+	toolkit.loadAllItems('memberships').then(function(posts){ 
+		var p = JSON.stringify(posts);
+		fs.writeFileSync('memberships.json', p);
+		console.log('total memberss', posts.length)
+	}, function(err){
+		console.log('error', err);
+	}, function(progress){
+		console.log(progress);
+	});	
+ }
+
+
+ function deleteMemberships(){
+ 	var mem = require('./memberships.json').map(function(it){ return it.id; });
+ 	var pending = mem.length;
+ 	toolkit.deleteItems('memberships', mem ).then(
+ 		function(){ console.log('done') },
+ 		function(err){ console.log('err', err) }, 
+ 		function(progress){ pending -= 1; console.log('pending ', pending );  }
+ 		)  ;
+ }
+
+
+function deletePosts(){
+ 	var mem = require('./posts.json').map(function(it){ return it.id; });
+ 	var pending = mem.length;
+ 	toolkit.deleteItems('posts', mem ).then(
+ 		function(){ console.log('done') },
+ 		function(err){ console.log('err', err) }, 
+ 		function(progress){ pending -= 1; console.log('pending ', pending );  }
+ 		)  ;
+ }
+
