@@ -1,0 +1,22 @@
+{
+  "name": "cargografias-popit-loader",
+  "version": "0.0.0",
+  "description": "cargografias-popit-loader\r =========================",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/dancalligaro/cargografias-popit-loader.git"
+  },
+  "author": "Daniel Calligaro <dancalligaro@gmail.com>",
+  "license": "none",
+  "bugs": {
+    "url": "https://github.com/dancalligaro/cargografias-popit-loader/issues"
+  },
+  "homepage": "https://github.com/dancalligaro/cargografias-popit-loader",
+  "dependencies": {
+    "popit-toolkit": "0.0.2"
+  }
+}
