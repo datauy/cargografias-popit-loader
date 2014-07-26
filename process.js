@@ -2,7 +2,7 @@
 var toolkit = require('popit-toolkit');
 var fs = require("fs");
 
-var config = require("./config.json");
+var config = require("./config.json");  //config file with user and password (not uploaded here)
 var content = require("./cargos.json"); //Google spreadsheet exported as JSON
 
 toolkit.config({
