@@ -46,9 +46,12 @@ function postItemsPersonas(){
 
 	var personasArr2 = personasArr.map( function(p){ return {name: p}; } );
 
-	toolkit.postItems('persons', personasArr2);
+	toolkit.postItems('persons', personasArr2).then(
+		function(){ console.log("done")}, 
+		function(){}, 
+		function(p){ console.log(p)  }
+		);
 }
-
 
 function postItemsPosts( allOrganizations ){
 	
@@ -103,7 +106,7 @@ function postItemsPosts( allOrganizations ){
 
 }
 
-// postItemsPosts (require('./organizations.json'));
+//postItemsPosts (require('./organizations.json'));
 
 
 function postItemsMemberships( allOrganizations, allPosts, allPersons ){
@@ -151,10 +154,25 @@ function postItemsMemberships( allOrganizations, allPosts, allPersons ){
 			membership.end_date = endDate;
 		}
 
+		if(!startDate){
+			if( item.gsx$fechainicioyear.$t ){
+				membership.start_date = item.gsx$fechainicioyear.$t + "-12-10";
+				membership.start_date_accuracy = "year"; 
+			}
+		}
+
+		if(!endDate){
+			if( item.gsx$fechafinyear.$t ){
+				membership.end_date = item.gsx$fechafinyear.$t + '-12-10';
+				membership.end_date_accuracy = "year";
+			}
+		}
+
 		//Validate dates
 		if(startDate && !dateRe.test(startDate)){
-			console.log('invalid start ', startDate)
+			console.log('invalid start ', startDate);
 		}
+		
 		if(endDate && !dateRe.test(endDate)){
 			console.log('invalid end ', endDate);
 		}
@@ -164,18 +182,20 @@ function postItemsMemberships( allOrganizations, allPosts, allPersons ){
 	});
 
 	var totalItems = membershipsToPost.length;
+
+
 	toolkit.postItems('memberships', membershipsToPost).then(
 		function(){ console.log('done') }, 
 		function(err){ console.log('err', err) }, 
 		function(progress){ totalItems-=1; console.log(totalItems); console.log(progress); }
-		);
+	);
 
 }
 
 // postItemsMemberships( 
 // 	require("./organizations.json"), 
 // 	require("./posts.json"), 
-// 	require("./persons") ) ;
+// 	require("./persons.json") ) ;
 
 function transformDateStr(input){
 	var p = input.split('/');
@@ -194,7 +214,7 @@ function transformDateStr(input){
 
 
 function loadAllPersonas(){
-	toolkit.loadAllItems('persons').then(function(personas){ 
+	toolkit.loadAllItems('persons').then(function(personas){
 		var p = JSON.stringify(personas);
 		fs.writeFileSync('persons.json', p);
 		console.log('total personas', personas.length)
@@ -210,7 +230,7 @@ function loadAllOrganizations(){
 		var p = JSON.stringify(organizations);
 		fs.writeFileSync('organizations.json', p);
 		console.log('total organizations', organizations.length)
-	});	
+	}, function(){}, function(p){ console.log(p)});	
 }
 
 function loadAllPosts(){
@@ -218,10 +238,9 @@ function loadAllPosts(){
 		var p = JSON.stringify(posts);
 		fs.writeFileSync('posts.json', p);
 		console.log('total posts', posts.length)
+
 	});	
 }
-
-//loadAllPosts();
 
  function showCargosExtendidos(){
  	var cargosExt = {};
@@ -246,6 +265,26 @@ function loadAllPosts(){
 	});	
  }
 
+ function deletePersonas(){
+ 	var mem = require('./persons.json').map(function(it){ return it.id; });
+ 	var pending = mem.length;
+ 	toolkit.deleteItems('persons', mem ).then(
+ 		function(){ console.log('done') },
+ 		function(err){ console.log('err', err) }, 
+ 		function(progress){ pending -= 1; console.log('pending ', pending );  }
+ 		)  ;
+ }
+
+function deleteOrganizations(){
+	var mem = require('./organizations.json').map(function(it){ return it.id; });
+	var pending = mem.length;
+	console.log("Deleting organizations: " + pending);
+	toolkit.deleteItems('organizations', mem ).then(
+		function(){ console.log('done') },
+		function(err){ console.log('err', err) }, 
+		function(progress){ pending -= 1; console.log('pending ', pending );  }
+		)  ;
+}
 
  function deleteMemberships(){
  	var mem = require('./memberships.json').map(function(it){ return it.id; });
@@ -256,7 +295,6 @@ function loadAllPosts(){
  		function(progress){ pending -= 1; console.log('pending ', pending );  }
  		)  ;
  }
-
 
 function deletePosts(){
  	var mem = require('./posts.json').map(function(it){ return it.id; });
