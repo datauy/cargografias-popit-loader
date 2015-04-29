@@ -1,15 +1,24 @@
-
-var toolkit = require('popit-toolkit');
+var PopitToolkit = require('popit-toolkit');
 var fs = require("fs");
+var request = require('request');
 
 var config = require("./config.json");  //config file with user and password (not uploaded here)
 var content = require("./cargos.json"); //Google spreadsheet exported as JSON
 
-toolkit.config({
-	host: 'cargografias.popit.mysociety.org', 
-	user: config.user, 
-	password: config.password
+toolkit = PopitToolkit({
+	host: config.host,
+	Apikey: config.Apikey
 });
+
+function downloadData(){
+	
+	request(config.gsheetsUrl, function (error, response, body) {
+	  if (!error && response.statusCode == 200) {
+	    fs.writeFileSync('cargos.json', body);
+	  }
+	})
+
+}
 
 function importTerritorios(){
 
@@ -25,7 +34,12 @@ function importTerritorios(){
 		itemsToPost.push({ name: territorio});
 	}
 
-	toolkit.postItems('organizations', itemsToPost);
+	// console.log(itemsToPost);
+	toolkit.postItems('organizations', itemsToPost).then(
+		function(){ console.log('done') }, 
+		function(err){ console.log('err', err) }, 
+		function(progress){ console.log(progress); }
+	)
 }
 
 function postItemsPersonas(){
@@ -106,8 +120,6 @@ function postItemsPosts( allOrganizations ){
 
 }
 
-//postItemsPosts (require('./organizations.json'));
-
 
 function postItemsMemberships( allOrganizations, allPosts, allPersons ){
 
@@ -130,6 +142,8 @@ function postItemsMemberships( allOrganizations, allPosts, allPersons ){
 	}, {});
 
 	var membershipsToPost = [];
+
+	var invalids = 0;
 
 	content.feed.entry.forEach(function(item){
 
@@ -306,3 +320,53 @@ function deletePosts(){
  		)  ;
  }
 
+/////////////
+
+function runProgram(argv){
+
+	if(argv.length < 4){
+		console.log("Usage: node process.js ACTION COLLECTION")
+		console.log("========================================")
+		console.log("Action: import, delete")
+		console.log("Collection: persons, posts, organizations, memberships")
+	}else{
+		
+		var action = argv[2];
+		var collection = argv[3];
+
+		if( ["import", "delete"].indexOf(action) == -1 ){
+			console.log("Invalid action " + action);
+			return;
+		}
+
+		if( ["persons", "posts", "organizations", "memberships"].indexOf(collection) == -1 ){
+			console.log("Invalid collection " + collection);
+			return;
+		}
+
+
+
+
+	}
+
+}
+
+//runProgram(process.argv);
+
+/////////==============
+
+// downloadData();
+// importTerritorios();
+// postItemsPersonas();
+// loadAllOrganizations();
+// postItemsPosts (require('./organizations.json'));
+// loadAllPosts();
+// loadAllPersonas(); 
+// postItemsMemberships( require("./organizations.json"), require("./posts.json"), require("./persons.json") ) ;
+
+/////////// ======
+
+// Extras
+
+//loadAllMemberships();
+//deleteMemberships();
