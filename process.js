@@ -1,208 +1,281 @@
+var Q = require('q');
 var PopitToolkit = require('popit-toolkit');
 var fs = require("fs");
 var request = require('request');
 
-var config = require("./config.json");  //config file with user and password (not uploaded here)
-var content = require("./cargos.json"); //Google spreadsheet exported as JSON
+var config = require("./config.json"); //config file with user and password (not uploaded here)
+var content; // = require("./cargos.json"); //Google spreadsheet exported as JSON
 
 toolkit = PopitToolkit({
-	host: config.host,
-	Apikey: config.Apikey
+  host: config.host,
+  Apikey: config.Apikey
 });
 
-function downloadData(){
-	
-	request(config.gsheetsUrl, function (error, response, body) {
-	  if (!error && response.statusCode == 200) {
-	    fs.writeFileSync('cargos.json', body);
-	  }
-	})
+function downloadData() {
+
+  var deferred = Q.defer();
+
+  request(config.gsheetsUrl, function(error, response, body) {
+    if (!error && response.statusCode == 200) {
+      fs.writeFileSync('cargos.json', body);
+      content = JSON.parse(body);
+      deferred.resolve();
+    } else {
+      deferred.reject("Error getting file")
+    }
+  })
+
+  return deferred.promise;
+}
+
+function importTerritorios() {
+
+  var deferred = Q.defer();
+
+  var territorios = {};
+
+  content.feed.entry.forEach(function(item) {
+    territorios[item.gsx$territorio.$t] = (territorios[item.gsx$territorio.$t] || 0) + 1;
+  });
+
+  var itemsToPost = [];
+
+  for (territorio in territorios) {
+    itemsToPost.push({
+      name: territorio
+    });
+  }
+
+  // console.log(itemsToPost);
+  toolkit.postItems('organizations', itemsToPost).then(
+    function() {
+      console.log('done');
+      deferred.resolve();
+    },
+    function(err) {
+      console.log('err', err);
+      deferred.reject(err)
+    },
+    function(progress) {
+      console.log(progress);
+    }
+  )
+
+  return deferred.promise;
 
 }
 
-function importTerritorios(){
+function postItemsPersonas() {
 
-	var territorios = {};
+  var deferred = Q.defer();
+  var personas = {};
+  var personasArr = [];
 
-	content.feed.entry.forEach(function(item){
-		territorios[ item.gsx$territorio.$t ] = (territorios[ item.gsx$territorio.$t ] || 0) + 1;
-	});
+  content.feed.entry.forEach(function(item) {
+    personas[item.gsx$nombre.$t + ' ' + item.gsx$apellido.$t] = (personas[item.gsx$nombre.$t + ' ' + item.gsx$apellido.$t] || 0) + 1;
+  });
 
-	var itemsToPost = [];
+  for (persona in personas) {
+    personasArr.push(persona);
+  }
+  personasArr.sort();
+  console.log(personasArr)
+  console.log(personasArr.length)
 
-	for (territorio in territorios){
-		itemsToPost.push({ name: territorio});
-	}
+  var personasArr2 = personasArr.map(function(p) {
+    return {
+      name: p
+    };
+  });
 
-	// console.log(itemsToPost);
-	toolkit.postItems('organizations', itemsToPost).then(
-		function(){ console.log('done') }, 
-		function(err){ console.log('err', err) }, 
-		function(progress){ console.log(progress); }
-	)
+  toolkit.postItems('persons', personasArr2).then(
+    function() {
+      console.log("done");
+      deferred.resolve();
+    },
+    function(err) {
+      console.log('err', err);
+      deferred.reject(err);
+    },
+    function(p) {
+      console.log(p)
+    }
+  );
+
+  return deferred.promise;
 }
 
-function postItemsPersonas(){
-	
-	var personas = {};
-	var personasArr = [];
-	
-	content.feed.entry.forEach(function(item){
-		personas[ item.gsx$nombre.$t + ' ' + item.gsx$apellido.$t ] = (personas[ item.gsx$nombre.$t + ' ' + item.gsx$apellido.$t ] || 0) + 1;
-	});
+function postItemsPosts() {
 
-	for(persona in personas){
-		personasArr.push(persona);
-	}
-	personasArr.sort();
-	console.log(personasArr)
-	console.log(personasArr.length)
+  var deferred = Q.defer();
 
-	var personasArr2 = personasArr.map( function(p){ return {name: p}; } );
+  var allOrganizations = require('./organizations.json');
 
-	toolkit.postItems('persons', personasArr2).then(
-		function(){ console.log("done")}, 
-		function(){}, 
-		function(p){ console.log(p)  }
-		);
-}
+  var organizations = allOrganizations.reduce(function(memo, organization) {
+    memo[organization.name] = organization;
+    return memo;
+  }, {});
 
-function postItemsPosts( allOrganizations ){
-	
-	var organizations = allOrganizations.reduce(function( memo, organization){
-		memo[organization.name] = organization;
-		return memo;
-	}, {});
+  var postsInfo = {};
 
-	var postsInfo = {};
+  // postsInfo[territorio][cargo]
+  // territorio -> organization
+  // post -> post in an organization
 
-	// postsInfo[territorio][cargo]
-	// territorio -> organization
-	// post -> post in an organization
+  content.feed.entry.forEach(function(item) {
 
-	content.feed.entry.forEach(function(item){
+    var cargo = (item.gsx$cargonominal.$t + ' ' + item.gsx$cargoext.$t).trim();
 
-		var cargo = ( item.gsx$cargonominal.$t + ' ' + item.gsx$cargoext.$t ) .trim() ; 
+    postsInfo[item.gsx$territorio.$t] = postsInfo[item.gsx$territorio.$t] || {};
+    postsInfo[item.gsx$territorio.$t][cargo] = postsInfo[item.gsx$territorio.$t][cargo] || {};
+    postsInfo[item.gsx$territorio.$t][cargo].duracioncargo = item.gsx$duracioncargo.$t;
+    postsInfo[item.gsx$territorio.$t][cargo].cargotipo = item.gsx$cargotipo.$t;
+    postsInfo[item.gsx$territorio.$t][cargo].cargoclase = item.gsx$cargoclase.$t;
+    postsInfo[item.gsx$territorio.$t][cargo].cargonominal = item.gsx$cargonominal.$t;
 
-		postsInfo[ item.gsx$territorio.$t ] = postsInfo[ item.gsx$territorio.$t ] || {};
-		postsInfo[ item.gsx$territorio.$t ][ cargo ] = postsInfo[ item.gsx$territorio.$t ][ cargo ] || {};  
-		postsInfo[ item.gsx$territorio.$t ][ cargo ].duracioncargo = item.gsx$duracioncargo.$t;
-		postsInfo[ item.gsx$territorio.$t ][ cargo ].cargotipo = item.gsx$cargotipo.$t;
-		postsInfo[ item.gsx$territorio.$t ][ cargo ].cargoclase = item.gsx$cargoclase.$t;
-		postsInfo[ item.gsx$territorio.$t ][ cargo ].cargonominal = item.gsx$cargonominal.$t;
+  });
 
-	});
+  var postsToPost = [];
 
-	var postsToPost = [];
+  for (territorio in postsInfo) {
+    for (cargonominal in postsInfo[territorio]) {
 
-	for (territorio in postsInfo){
-		for(cargonominal in postsInfo[territorio]){
+      postsToPost.push({
+        label: cargonominal,
+        organization_id: organizations[territorio].id,
+        role: cargonominal,
+        cargonominal: postsInfo[territorio][cargonominal].cargonominal,
+        duracioncargo: postsInfo[territorio][cargonominal].duracioncargo,
+        cargotipo: postsInfo[territorio][cargonominal].cargotipo,
+        cargoclase: postsInfo[territorio][cargonominal].cargoclase
+      });
 
-			postsToPost.push({
-				label: cargonominal, 
-				organization_id: organizations[territorio].id, 
-				role: cargonominal, 
-				cargonominal: postsInfo[territorio][cargonominal].cargonominal,
-				duracioncargo: postsInfo[territorio][cargonominal].duracioncargo,
-				cargotipo: postsInfo[territorio][cargonominal].cargotipo,
-				cargoclase: postsInfo[territorio][cargonominal].cargoclase
-			});
+    }
+  }
 
-		}
-	}
+  var totalItems = postsToPost.length;
+  toolkit.postItems('posts', postsToPost).then(
+    function() {
+      console.log('done');
+      deferred.resolve();
+    },
+    function(err) {
+      console.log('err', err);
+      deferred.reject(err);
+    },
+    function(progress) {
+      totalItems -= 1;
+      console.log(totalItems);
+      console.log(progress);
+    }
+  );
 
-	var totalItems = postsToPost.length;
-	toolkit.postItems('posts', postsToPost).then(
-		function(){ console.log('done') }, 
-		function(err){ console.log('err', err) }, 
-		function(progress){ totalItems-=1; console.log(totalItems); console.log(progress); }
-		);
+  return deferred.promise;
 
 }
 
 
-function postItemsMemberships( allOrganizations, allPosts, allPersons ){
+function postItemsMemberships() {
 
-	var dateRe = /^[0-9]{4}(-[0-9]{2}){0,2}$/;
+  var allOrganizations = require("./organizations.json");
+  var allPosts = require("./posts.json");
+  var allPersons = require("./persons.json");
 
-	var organizations = allOrganizations.reduce(function( memo, organization){
-		memo[organization.name] = organization;
-		return memo;
-	}, {});
+  var deferred = Q.defer();
 
-	var persons = allPersons.reduce(function(memo, person){
-		memo[person.name] = person;
-		return memo;
-	}, {});
+  var dateRe = /^[0-9]{4}(-[0-9]{2}){0,2}$/;
 
-	var posts = allPosts.reduce( function(memo, post){
-		memo[ post.organization_id ] = memo[ post.organization_id ] || {};
-		memo[ post.organization_id ][ post.label ] = post;
-		return memo;
-	}, {});
+  var organizations = allOrganizations.reduce(function(memo, organization) {
+    memo[organization.name] = organization;
+    return memo;
+  }, {});
 
-	var membershipsToPost = [];
+  var persons = allPersons.reduce(function(memo, person) {
+    memo[person.name] = person;
+    return memo;
+  }, {});
 
-	var invalids = 0;
+  var posts = allPosts.reduce(function(memo, post) {
+    memo[post.organization_id] = memo[post.organization_id] || {};
+    memo[post.organization_id][post.label] = post;
+    return memo;
+  }, {});
 
-	content.feed.entry.forEach(function(item){
+  var membershipsToPost = [];
 
-		var cargo = ( item.gsx$cargonominal.$t + ' ' + item.gsx$cargoext.$t ) .trim() ; 
+  var invalids = 0;
 
-		var membership = {
-			  "label": cargo,
-			  "role": cargo,
-			  "person_id": persons[ item.gsx$nombre.$t + " " + item.gsx$apellido.$t].id,
-			  "organization_id": organizations[ item.gsx$territorio.$t ].id,
-			  "post_id": posts[organizations[ item.gsx$territorio.$t ].id][ cargo ].id, 
-			  "cargonominal": item.gsx$cargonominal.$t
-		};
+  content.feed.entry.forEach(function(item) {
 
-		var startDate = transformDateStr(item.gsx$fechainicio.$t); // || item.gsx$fechainicioyear.$t;
-		if(startDate){
-			membership.start_date = startDate;
-		}
+    var cargo = (item.gsx$cargonominal.$t + ' ' + item.gsx$cargoext.$t).trim();
 
-		var endDate = transformDateStr(item.gsx$fechafin.$t);// || item.gsx$fechafinyear.$t;
-		if(endDate){
-			membership.end_date = endDate;
-		}
+    var membership = {
+      "label": cargo,
+      "role": cargo,
+      "person_id": persons[item.gsx$nombre.$t + " " + item.gsx$apellido.$t].id,
+      "organization_id": organizations[item.gsx$territorio.$t].id,
+      "post_id": posts[organizations[item.gsx$territorio.$t].id][cargo].id,
+      "cargonominal": item.gsx$cargonominal.$t
+    };
 
-		if(!startDate){
-			if( item.gsx$fechainicioyear.$t ){
-				membership.start_date = item.gsx$fechainicioyear.$t + "-12-10";
-				membership.start_date_accuracy = "year"; 
-			}
-		}
+    var startDate = transformDateStr(item.gsx$fechainicio.$t); // || item.gsx$fechainicioyear.$t;
+    if (startDate) {
+      membership.start_date = startDate;
+    }
 
-		if(!endDate){
-			if( item.gsx$fechafinyear.$t ){
-				membership.end_date = item.gsx$fechafinyear.$t + '-12-10';
-				membership.end_date_accuracy = "year";
-			}
-		}
+    var endDate = transformDateStr(item.gsx$fechafin.$t); // || item.gsx$fechafinyear.$t;
+    if (endDate) {
+      membership.end_date = endDate;
+    }
 
-		//Validate dates
-		if(startDate && !dateRe.test(startDate)){
-			console.log('invalid start ', startDate);
-		}
-		
-		if(endDate && !dateRe.test(endDate)){
-			console.log('invalid end ', endDate);
-		}
+    if (!startDate) {
+      if (item.gsx$fechainicioyear.$t) {
+        membership.start_date = item.gsx$fechainicioyear.$t + "-12-10";
+        membership.start_date_accuracy = "year";
+      }
+    }
 
-		membershipsToPost.push(membership);
+    if (!endDate) {
+      if (item.gsx$fechafinyear.$t) {
+        membership.end_date = item.gsx$fechafinyear.$t + '-12-10';
+        membership.end_date_accuracy = "year";
+      }
+    }
 
-	});
+    //Validate dates
+    if (startDate && !dateRe.test(startDate)) {
+      console.log('invalid start ', startDate);
+    }
 
-	var totalItems = membershipsToPost.length;
+    if (endDate && !dateRe.test(endDate)) {
+      console.log('invalid end ', endDate);
+    }
+
+    membershipsToPost.push(membership);
+
+  });
+
+  var totalItems = membershipsToPost.length;
 
 
-	toolkit.postItems('memberships', membershipsToPost).then(
-		function(){ console.log('done') }, 
-		function(err){ console.log('err', err) }, 
-		function(progress){ totalItems-=1; console.log(totalItems); console.log(progress); }
-	);
+  toolkit.postItems('memberships', membershipsToPost).then(
+    function() {
+      console.log('done');
+      deferred.resolve();
+    },
+    function(err) {
+
+      console.log('THERE IS AN ERROR HERE err', err);
+      deferred.reject(err);
+    },
+    function(progress) {
+      totalItems -= 1;
+      console.log(totalItems);
+      console.log(progress);
+    }
+  );
+
+  return deferred.promise;
 
 }
 
@@ -211,162 +284,247 @@ function postItemsMemberships( allOrganizations, allPosts, allPersons ){
 // 	require("./posts.json"), 
 // 	require("./persons.json") ) ;
 
-function transformDateStr(input){
-	var p = input.split('/');
-	var res = [];
-	if(p.length == 3){
-		res.push(p[2]);
-		res.push('-');
-		if(p[1].length == 1) { res.push( '0' ); }
-		res.push(p[1]);
-		res.push('-');
-		if(p[0].length == 1) { res.push( '0' ); }
-		res.push(p[0]);
-		return res.join('');
-	}
+function transformDateStr(input) {
+  var p = input.split('/');
+  var res = [];
+  if (p.length == 3) {
+    res.push(p[2]);
+    res.push('-');
+    if (p[1].length == 1) {
+      res.push('0');
+    }
+    res.push(p[1]);
+    res.push('-');
+    if (p[0].length == 1) {
+      res.push('0');
+    }
+    res.push(p[0]);
+    return res.join('');
+  }
 }
 
 
-function loadAllPersonas(){
-	toolkit.loadAllItems('persons').then(function(personas){
-		var p = JSON.stringify(personas);
-		fs.writeFileSync('persons.json', p);
-		console.log('total personas', personas.length)
-	}, function(err){
-		console.log('error', err);
-	}, function(progress){
-		console.log(progress);
-	});
-}
+function loadAllPersonas() {
 
-function loadAllOrganizations(){
-	toolkit.loadAllItems('organizations').then(function(organizations){ 
-		var p = JSON.stringify(organizations);
-		fs.writeFileSync('organizations.json', p);
-		console.log('total organizations', organizations.length)
-	}, function(){}, function(p){ console.log(p)});	
-}
-
-function loadAllPosts(){
-	toolkit.loadAllItems('posts').then(function(posts){ 
-		var p = JSON.stringify(posts);
-		fs.writeFileSync('posts.json', p);
-		console.log('total posts', posts.length)
-
-	});	
-}
-
- function showCargosExtendidos(){
- 	var cargosExt = {};
- 	content.feed.entry.forEach(function(item){
-		cargosExt[ item.gsx$cargoext.$t ] = (cargosExt[ item.gsx$cargoext.$t ] || 0) + 1;
-	});	
-
-	console.log(cargosExt);
- }
-
- //showCargosExtendidos();
-
- function loadAllMemberships(){
-	toolkit.loadAllItems('memberships').then(function(posts){ 
-		var p = JSON.stringify(posts);
-		fs.writeFileSync('memberships.json', p);
-		console.log('total memberss', posts.length)
-	}, function(err){
-		console.log('error', err);
-	}, function(progress){
-		console.log(progress);
-	});	
- }
-
- function deletePersonas(){
- 	var mem = require('./persons.json').map(function(it){ return it.id; });
- 	var pending = mem.length;
- 	toolkit.deleteItems('persons', mem ).then(
- 		function(){ console.log('done') },
- 		function(err){ console.log('err', err) }, 
- 		function(progress){ pending -= 1; console.log('pending ', pending );  }
- 		)  ;
- }
-
-function deleteOrganizations(){
-	var mem = require('./organizations.json').map(function(it){ return it.id; });
-	var pending = mem.length;
-	console.log("Deleting organizations: " + pending);
-	toolkit.deleteItems('organizations', mem ).then(
-		function(){ console.log('done') },
-		function(err){ console.log('err', err) }, 
-		function(progress){ pending -= 1; console.log('pending ', pending );  }
-		)  ;
-}
-
- function deleteMemberships(){
- 	var mem = require('./memberships.json').map(function(it){ return it.id; });
- 	var pending = mem.length;
- 	toolkit.deleteItems('memberships', mem ).then(
- 		function(){ console.log('done') },
- 		function(err){ console.log('err', err) }, 
- 		function(progress){ pending -= 1; console.log('pending ', pending );  }
- 		)  ;
- }
-
-function deletePosts(){
- 	var mem = require('./posts.json').map(function(it){ return it.id; });
- 	var pending = mem.length;
- 	toolkit.deleteItems('posts', mem ).then(
- 		function(){ console.log('done') },
- 		function(err){ console.log('err', err) }, 
- 		function(progress){ pending -= 1; console.log('pending ', pending );  }
- 		)  ;
- }
-
-/////////////
-
-function runProgram(argv){
-
-	if(argv.length < 4){
-		console.log("Usage: node process.js ACTION COLLECTION")
-		console.log("========================================")
-		console.log("Action: import, delete")
-		console.log("Collection: persons, posts, organizations, memberships")
-	}else{
-		
-		var action = argv[2];
-		var collection = argv[3];
-
-		if( ["import", "delete"].indexOf(action) == -1 ){
-			console.log("Invalid action " + action);
-			return;
-		}
-
-		if( ["persons", "posts", "organizations", "memberships"].indexOf(collection) == -1 ){
-			console.log("Invalid collection " + collection);
-			return;
-		}
-
-
-
-
-	}
+  return Q.Promise(function(resolve, reject, notify) {
+    toolkit.loadAllItems('persons').then(function(personas) {
+      var p = JSON.stringify(personas);
+      fs.writeFileSync('persons.json', p);
+      console.log('total personas', personas.length)
+      resolve();
+    }, function(err) {
+      console.log('error', err);
+      reject();
+    }, function(progress) {
+      console.log(progress);
+      notify(progress);
+    });
+  });
 
 }
 
-//runProgram(process.argv);
+function loadAllOrganizations() {
+  return Q.Promise(function(resolve, reject, notify) {
+    toolkit.loadAllItems('organizations').then(function(organizations) {
+      var p = JSON.stringify(organizations);
+      fs.writeFileSync('organizations.json', p);
+      console.log('total organizations', organizations.length)
+      resolve();
+    }, reject, function(p) {
+      console.log(p)
+      notify(p);
+    });
+  })
+}
 
-/////////==============
+function loadAllPosts() {
 
-// downloadData();
-// importTerritorios();
-// postItemsPersonas();
-// loadAllOrganizations();
-// postItemsPosts (require('./organizations.json'));
-// loadAllPosts();
-// loadAllPersonas(); 
-// postItemsMemberships( require("./organizations.json"), require("./posts.json"), require("./persons.json") ) ;
+  return Q.Promise(function(resolve, reject, notify) {
 
-/////////// ======
+    console.log('loading posts')
+    toolkit.loadAllItems('posts').then(function(posts) {
+      var p = JSON.stringify(posts);
+      fs.writeFileSync('posts.json', p);
+      console.log('total posts', posts.length)
+      resolve();
+    });
 
-// Extras
+  })
 
-//loadAllMemberships();
-//deleteMemberships();
+}
+
+function showCargosExtendidos() {
+  var cargosExt = {};
+  content.feed.entry.forEach(function(item) {
+    cargosExt[item.gsx$cargoext.$t] = (cargosExt[item.gsx$cargoext.$t] || 0) + 1;
+  });
+
+  console.log(cargosExt);
+}
+
+//showCargosExtendidos();
+
+function loadAllMemberships() {
+
+  return Q.Promise(function(resolve, reject, notify) {
+
+    toolkit.loadAllItems('memberships').then(function(posts) {
+      var p = JSON.stringify(posts);
+      fs.writeFileSync('memberships.json', p);
+      console.log('total members', posts.length)
+      resolve();
+    }, function(err) {
+      console.log('error', err);
+      reject(err);
+    }, function(progress) {
+      console.log(progress);
+      notify(progress);
+    });
+
+  });
+}
+
+function deletePersonas() {
+  var mem = require('./persons.json').map(function(it) {
+    return it.id;
+  });
+  var pending = mem.length;
+  return toolkit.deleteItems('persons', mem).then(
+    function() {
+      console.log('done')
+    },
+    function(err) {
+      console.log('err', err)
+    },
+    function(progress) {
+      pending -= 1;
+      console.log('pending ', pending);
+    }
+  );
+}
+
+function deleteOrganizations() {
+  var mem = require('./organizations.json').map(function(it) {
+    return it.id;
+  });
+  var pending = mem.length;
+  console.log("Deleting organizations: " + pending);
+  return toolkit.deleteItems('organizations', mem).then(
+    function() {
+      console.log('done')
+    },
+    function(err) {
+      console.log('err', err)
+    },
+    function(progress) {
+      pending -= 1;
+      console.log('pending ', pending);
+    }
+  );
+}
+
+function deleteMemberships() {
+  console.log("Deleting Memberships")
+  var mem = require('./memberships.json').map(function(it) {
+    return it.id;
+  });
+  var pending = mem.length;
+  return toolkit.deleteItems('memberships', mem).then(
+    function() {
+      console.log('done')
+    },
+    function(err) {
+      console.log('err', err)
+    },
+    function(progress) {
+      pending -= 1;
+      console.log('pending ', pending);
+    }
+  );
+}
+
+function deletePosts() {
+  var mem = require('./posts.json').map(function(it) {
+    return it.id;
+  });
+  var pending = mem.length;
+  return toolkit.deleteItems('posts', mem).then(
+    function() {
+      console.log('done')
+    },
+    function(err) {
+      console.log('err', err)
+    },
+    function(progress) {
+      pending -= 1;
+      console.log('pending ', pending);
+    }
+  );
+}
+
+
+function runProgram(argv) {
+
+  console.log("Instance: " + config.host);
+
+
+  if (argv.length != 3) {
+    console.log("Usage: node process.js [import|delete]")
+  } else {
+
+    var action = argv[2];
+
+    if (["import", "delete"].indexOf(action) == -1) {
+      console.log("Invalid action " + action);
+      return;
+    }
+
+    if (action == "import") {
+      runImport();
+    } else if (action = "delete") {
+      runDelete();
+    }
+
+
+  }
+
+}
+
+
+function runImport() {
+
+  Q.fcall(downloadData)
+    .then(importTerritorios)
+    .then(postItemsPersonas)
+    .then(loadAllOrganizations)
+    .then(postItemsPosts)
+    .then(loadAllPosts)
+    .then(loadAllPersonas)
+    .then(postItemsMemberships)
+    .catch(function(err) {
+      console.log("Something went wrong");
+      throw err;
+    })
+    .done();
+
+}
+
+function runDelete() {
+
+  Q.fcall(loadAllMemberships)
+    .then(deleteMemberships)
+    .then(loadAllPosts)
+    .then(deletePosts)
+    .then(loadAllPersonas)
+    .then(deletePersonas)
+    .then(loadAllOrganizations)
+    .then(deleteOrganizations)
+    .catch(function(err) {
+      console.log("Something went wrong");
+      throw err;
+    })
+    .done();
+
+}
+
+runProgram(process.argv);
