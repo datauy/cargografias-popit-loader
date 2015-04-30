@@ -3,13 +3,9 @@ var PopitToolkit = require('popit-toolkit');
 var fs = require("fs");
 var request = require('request');
 
-var config = require("./config.json"); //config file with user and password (not uploaded here)
+var config = null;
 var content; // = require("./cargos.json"); //Google spreadsheet exported as JSON
-
-toolkit = PopitToolkit({
-  host: config.host,
-  Apikey: config.Apikey
-});
+var toolkit;
 
 function downloadData() {
 
@@ -462,17 +458,22 @@ function deletePosts() {
   );
 }
 
-
 function runProgram(argv) {
 
-  console.log("Instance: " + config.host);
-
-
-  if (argv.length != 3) {
-    console.log("Usage: node process.js [import|delete]")
+  if (argv.length != 4) {
+    console.log("Usage: node process.js [import|delete] [instanceName]")
   } else {
 
     var action = argv[2];
+    var instance = argv[3];
+
+    config = require("./config_" + instance + ".json");
+    console.log("Instance: " + config.host);
+
+    toolkit = PopitToolkit({
+      host: config.host,
+      Apikey: config.Apikey
+    });
 
     if (["import", "delete"].indexOf(action) == -1) {
       console.log("Invalid action " + action);
@@ -484,7 +485,6 @@ function runProgram(argv) {
     } else if (action = "delete") {
       runDelete();
     }
-
 
   }
 
