@@ -125,81 +125,10 @@ function popitCreatePersons() {
   return deferred.promise;
 }
 
-function postItemsPosts() {
+function popitCreateMemberships() {
 
-  var deferred = Q.defer();
-
-  var allOrganizations = require('./organizations.json');
-
-  var organizations = allOrganizations.reduce(function(memo, organization) {
-    memo[organization.name] = organization;
-    return memo;
-  }, {});
-
-  var postsInfo = {};
-
-  // postsInfo[territorio][cargo]
-  // territorio -> organization
-  // post -> post in an organization
-
-  content.feed.entry.forEach(function(item) {
-
-    var cargo = (item.gsx$cargonominal.$t + ' ' + item.gsx$cargoext.$t).trim();
-
-    postsInfo[item.gsx$territorio.$t] = postsInfo[item.gsx$territorio.$t] || {};
-    postsInfo[item.gsx$territorio.$t][cargo] = postsInfo[item.gsx$territorio.$t][cargo] || {};
-    postsInfo[item.gsx$territorio.$t][cargo].duracioncargo = item.gsx$duracioncargo.$t;
-    postsInfo[item.gsx$territorio.$t][cargo].cargotipo = item.gsx$cargotipo.$t;
-    postsInfo[item.gsx$territorio.$t][cargo].cargoclase = item.gsx$cargoclase.$t;
-    postsInfo[item.gsx$territorio.$t][cargo].cargonominal = item.gsx$cargonominal.$t;
-
-  });
-
-  var postsToPost = [];
-
-  for (territorio in postsInfo) {
-    for (cargonominal in postsInfo[territorio]) {
-
-      postsToPost.push({
-        label: cargonominal,
-        organization_id: organizations[territorio].id,
-        role: cargonominal,
-        cargonominal: postsInfo[territorio][cargonominal].cargonominal,
-        duracioncargo: postsInfo[territorio][cargonominal].duracioncargo,
-        cargotipo: postsInfo[territorio][cargonominal].cargotipo,
-        cargoclase: postsInfo[territorio][cargonominal].cargoclase
-      });
-
-    }
-  }
-
-  var totalItems = postsToPost.length;
-  toolkit.postItems('posts', postsToPost).then(
-    function() {
-      console.log('done');
-      deferred.resolve();
-    },
-    function(err) {
-      console.log('err', err);
-      deferred.reject(err);
-    },
-    function(progress) {
-      totalItems -= 1;
-      console.log(totalItems);
-      console.log(progress);
-    }
-  );
-
-  return deferred.promise;
-
-}
-
-
-function postItemsMemberships() {
-
-  var allOrganizations = require("./organizations.json");
-  var allPosts = require("./posts.json");
-  var allPersons = require("./persons.json");
+  var allOrganizations = require("./data/organizations.json");
+  var allPersons = require("./data/persons.json");
 
   var deferred = Q.defer();
 
@@ -215,27 +144,28 @@ function postItemsMemberships() {
     return memo;
   }, {});
 
-  var posts = allPosts.reduce(function(memo, post) {
-    memo[post.organization_id] = memo[post.organization_id] || {};
-    memo[post.organization_id][post.label] = post;
-    return memo;
-  }, {});
-
   var membershipsToPost = [];
 
   var invalids = 0;
 
   content.feed.entry.forEach(function(item) {
 
-    var cargo = (item.gsx$cargonominal.$t + ' ' + item.gsx$cargoext.$t).trim();
-
     var membership = {
-      "label": cargo,
-      "role": cargo,
+      "label": item.gsx$cargonominal.$t,
+      "role": item.gsx$cargonominal.$t,
+      "type": item.gsx$cargotipo.$t,
+      "class": item.gsx$cargoclase.$t,
+      "intended_duration": item.gsx$duracioncargo.$t,
       "person_id": persons[item.gsx$nombre.$t + " " + item.gsx$apellido.$t].id,
-      "organization_id": organizations[item.gsx$territorio.$t].id,
-      "post_id": posts[organizations[item.gsx$territorio.$t].id][cargo].id,
-      "cargonominal": item.gsx$cargonominal.$t
+      "organization_id": organizations[item.gsx$organizacion.$t].id,
+      "naming_date": item.gsx$fechanombramiento.$t,
+      "area_id": item.gsx$areaid.$t,
+      "party": item.gsx$partido.$t,
+      "party_id": item.gsx$partidogeneral.$t,
+      "heritage": item.gsx$patrimtotal.$t,
+      "heritage_url": item.gsx$patrimurl.$t,
+      "notes": item.gsx$observaciones.$t,
+      "added_by": item.gsx$agregadopor.$t,
     };
 
     var startDate = transformDateStr(item.gsx$fechainicio.$t); // || item.gsx$fechainicioyear.$t;
@@ -271,12 +201,39 @@ function postItemsMemberships() {
       console.log('invalid end ', endDate);
     }
 
+    //Sources
+    if( item.gsx$fuentededatosinicio.$t || item.gsx$urlfuenteinicio.$t ){
+      membership.sources = membership.sources || [];
+      membership.sources.push({
+        data: "start_date", 
+        source: item.gsx$fuentededatosinicio.$t, 
+        source_url: item.gsx$urlfuenteinicio.$t,
+        quality: item.gsx$calidaddeldatoinicio.$t,
+      });
+    }
+
+    if( item.gsx$fuentededatosfin.$t || item.gsx$urlfuentefin.$t ){
+      membership.sources = membership.sources || [];
+      membership.sources.push({
+        data: "end_date", 
+        source: item.gsx$fuentededatosfin.$t, 
+        source_url: item.gsx$urlfuentefin.$t,
+        quality: item.gsx$calidaddeldatofin.$t,
+      });
+    }
+
+    if( item.gsx$territorio.$t ){
+      membership.area = {
+        id: item.gsx$territorio.$t + ', ' + item.gsx$territorioextendido.$t,
+        name: item.gsx$territorio.$t + ', ' + item.gsx$territorioextendido.$t
+      };       
+    }
+
     membershipsToPost.push(membership);
 
   });
 
   var totalItems = membershipsToPost.length;
-
 
   toolkit.postItems('memberships', membershipsToPost).then(
     function() {
@@ -284,8 +241,7 @@ function postItemsMemberships() {
       deferred.resolve();
     },
     function(err) {
-
-      console.log('THERE IS AN ERROR HERE err', err);
+      console.log('Error', err);
       deferred.reject(err);
     },
     function(progress) {
@@ -343,11 +299,11 @@ function popitLoadPersons() {
 
 }
 
-function loadAllOrganizations() {
+function popitLoadOrganizations() {
   return Q.Promise(function(resolve, reject, notify) {
     toolkit.loadAllItems('organizations').then(function(organizations) {
       var p = JSON.stringify(organizations);
-      fs.writeFileSync('data/organizations.json', p);
+      fs.writeFileSync('data/organizations.json', beautify(p, { indent_size: 2 }));
       console.log('total organizations', organizations.length)
       resolve();
     }, reject, function(p) {
@@ -355,22 +311,6 @@ function loadAllOrganizations() {
       notify(p);
     });
   })
-}
-
-function loadAllPosts() {
-
-  return Q.Promise(function(resolve, reject, notify) {
-
-    console.log('loading posts')
-    toolkit.loadAllItems('posts').then(function(posts) {
-      var p = JSON.stringify(posts);
-      fs.writeFileSync('data/posts.json', p);
-      console.log('total posts', posts.length)
-      resolve();
-    });
-
-  })
-
 }
 
 function showCargosExtendidos() {
@@ -382,16 +322,14 @@ function showCargosExtendidos() {
   console.log(cargosExt);
 }
 
-//showCargosExtendidos();
-
-function loadAllMemberships() {
+function popitLoadMemberships() {
 
   return Q.Promise(function(resolve, reject, notify) {
 
     toolkit.loadAllItems('memberships').then(function(posts) {
       var p = JSON.stringify(posts);
-      fs.writeFileSync('data/memberships.json', p);
-      console.log('total members', posts.length)
+      fs.writeFileSync('data/memberships.json', beautify(p, { indent_size: 2 }));
+      console.log('Total Memberships', posts.length)
       resolve();
     }, function(err) {
       console.log('error', err);
@@ -423,7 +361,7 @@ function popitDeletePersons() {
   );
 }
 
-function deleteOrganizations() {
+function popitDeleteOrganizations() {
   var mem = require('./data/organizations.json').map(function(it) {
     return it.id;
   });
@@ -443,32 +381,13 @@ function deleteOrganizations() {
   );
 }
 
-function deleteMemberships() {
+function popitDeleteMemberships() {
   console.log("Deleting Memberships")
   var mem = require('./data/memberships.json').map(function(it) {
     return it.id;
   });
   var pending = mem.length;
   return toolkit.deleteItems('memberships', mem).then(
-    function() {
-      console.log('done')
-    },
-    function(err) {
-      console.log('err', err)
-    },
-    function(progress) {
-      pending -= 1;
-      console.log('pending ', pending);
-    }
-  );
-}
-
-function deletePosts() {
-  var mem = require('./data/posts.json').map(function(it) {
-    return it.id;
-  });
-  var pending = mem.length;
-  return toolkit.deleteItems('posts', mem).then(
     function() {
       console.log('done')
     },
@@ -520,11 +439,12 @@ function runImport() {
   Q.fcall(function(){})
     .then(downloadSpreadsheet)
     .then(loadSpreadsheetData)
-    //.then(popitCreatePersons)
+    .then(popitCreatePersons)
     .then(popitLoadPersons)
     .then(popitCreateOrganizations)
-    // .then(popitLoadOrganizations)
-    // .then(popitCreateMemberships)
+    .then(popitLoadOrganizations)
+    .then(popitCreateMemberships)
+    .then(popitLoadMemberships)
     .catch(function(err) {
       console.log("Something went wrong");
       throw err;
@@ -536,10 +456,10 @@ function runImport() {
 function runDelete() {
 
   Q.fcall(function(){})
-    // .then(popitLoadMemberships)
-    // .then(popitDeleteMemberships)
-    // .then(popitLoadOrganizations)
-    // .then(popitDeleteOrganizations)
+    .then(popitLoadMemberships)
+    .then(popitDeleteMemberships)
+    .then(popitLoadOrganizations)
+    .then(popitDeleteOrganizations)
     .then(popitLoadPersons)
     .then(popitDeletePersons)
     .catch(function(err) {
