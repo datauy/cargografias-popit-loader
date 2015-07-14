@@ -404,7 +404,7 @@ function loadAllMemberships() {
   });
 }
 
-function deletePersonas() {
+function popitDeletePersons() {
   var mem = require('./data/persons.json').map(function(it) {
     return it.id;
   });
@@ -491,7 +491,7 @@ function runProgram(argv) {
     var action = argv[2];
     var instance = argv[3];
 
-    config = require("./config_" + instance + ".json");
+    config = require("./config/" + instance + ".json");
     console.log("Instance: " + config.host);
 
     toolkit = PopitToolkit({
@@ -518,10 +518,10 @@ function runProgram(argv) {
 function runImport() {
 
   Q.fcall(function(){})
-    //.then(downloadSpreadsheet)
+    .then(downloadSpreadsheet)
     .then(loadSpreadsheetData)
     //.then(popitCreatePersons)
-    //.then(popitLoadPersons)
+    .then(popitLoadPersons)
     .then(popitCreateOrganizations)
     // .then(popitLoadOrganizations)
     // .then(popitCreateMemberships)
@@ -535,10 +535,11 @@ function runImport() {
 
 function runDelete() {
 
-  Q.fcall(popitLoadMemberships)
-    .then(popitDeleteMemberships)
-    .then(popitLoadOrganizations)
-    .then(popitDeleteOrganizations)
+  Q.fcall(function(){})
+    // .then(popitLoadMemberships)
+    // .then(popitDeleteMemberships)
+    // .then(popitLoadOrganizations)
+    // .then(popitDeleteOrganizations)
     .then(popitLoadPersons)
     .then(popitDeletePersons)
     .catch(function(err) {
