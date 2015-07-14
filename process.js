@@ -14,7 +14,7 @@ function downloadSpreadsheet() {
 
   request(config.gsheetsUrl, function(error, response, body) {
     if (!error && response.statusCode == 200) {
-      fs.writeFileSync('cargos.json',  beautify(body, { indent_size: 2 }));
+      fs.writeFileSync('data/cargos.json',  beautify(body, { indent_size: 2 }));
       deferred.resolve();
     } else {
       deferred.reject("Error getting file")
@@ -26,30 +26,28 @@ function downloadSpreadsheet() {
 
 function loadSpreadsheetData() {
   var deferred = Q.defer();
-  content = require('./cargos.json')
+  content = require('./data/cargos.json')
   deferred.resolve();
   return deferred.promise;
 }
 
-function importTerritorios() {
+function popitCreateOrganizations() {
 
   var deferred = Q.defer();
 
-  var territorios = {};
-
-  content.feed.entry.forEach(function(item) {
-    territorios[item.gsx$territorio.$t] = (territorios[item.gsx$territorio.$t] || 0) + 1;
-  });
-
+  var organizations = {};
   var itemsToPost = [];
 
-  for (territorio in territorios) {
-    itemsToPost.push({
-      name: territorio
-    });
-  }
+  content.feed.entry.forEach(function(item) {
+    var key = item.gsx$organizacion.$t
+    if(!organizations[key]){
+      organizations[key] = 1;
+      itemsToPost.push({
+        name: key
+      });  
+    }
+  });
 
-  // console.log(itemsToPost);
   toolkit.postItems('organizations', itemsToPost).then(
     function() {
       console.log('done');
@@ -331,7 +329,7 @@ function popitLoadPersons() {
   return Q.Promise(function(resolve, reject, notify) {
     toolkit.loadAllItems('persons').then(function(personas) {
       var p = JSON.stringify(personas);
-      fs.writeFileSync('persons.json', beautify(p, { indent_size: 2 }));
+      fs.writeFileSync('data/persons.json', beautify(p, { indent_size: 2 }));
       console.log('total personas', personas.length)
       resolve();
     }, function(err) {
@@ -349,7 +347,7 @@ function loadAllOrganizations() {
   return Q.Promise(function(resolve, reject, notify) {
     toolkit.loadAllItems('organizations').then(function(organizations) {
       var p = JSON.stringify(organizations);
-      fs.writeFileSync('organizations.json', p);
+      fs.writeFileSync('data/organizations.json', p);
       console.log('total organizations', organizations.length)
       resolve();
     }, reject, function(p) {
@@ -366,7 +364,7 @@ function loadAllPosts() {
     console.log('loading posts')
     toolkit.loadAllItems('posts').then(function(posts) {
       var p = JSON.stringify(posts);
-      fs.writeFileSync('posts.json', p);
+      fs.writeFileSync('data/posts.json', p);
       console.log('total posts', posts.length)
       resolve();
     });
@@ -392,7 +390,7 @@ function loadAllMemberships() {
 
     toolkit.loadAllItems('memberships').then(function(posts) {
       var p = JSON.stringify(posts);
-      fs.writeFileSync('memberships.json', p);
+      fs.writeFileSync('data/memberships.json', p);
       console.log('total members', posts.length)
       resolve();
     }, function(err) {
@@ -407,7 +405,7 @@ function loadAllMemberships() {
 }
 
 function deletePersonas() {
-  var mem = require('./persons.json').map(function(it) {
+  var mem = require('./data/persons.json').map(function(it) {
     return it.id;
   });
   var pending = mem.length;
@@ -426,7 +424,7 @@ function deletePersonas() {
 }
 
 function deleteOrganizations() {
-  var mem = require('./organizations.json').map(function(it) {
+  var mem = require('./data/organizations.json').map(function(it) {
     return it.id;
   });
   var pending = mem.length;
@@ -447,7 +445,7 @@ function deleteOrganizations() {
 
 function deleteMemberships() {
   console.log("Deleting Memberships")
-  var mem = require('./memberships.json').map(function(it) {
+  var mem = require('./data/memberships.json').map(function(it) {
     return it.id;
   });
   var pending = mem.length;
@@ -466,7 +464,7 @@ function deleteMemberships() {
 }
 
 function deletePosts() {
-  var mem = require('./posts.json').map(function(it) {
+  var mem = require('./data/posts.json').map(function(it) {
     return it.id;
   });
   var pending = mem.length;
@@ -522,9 +520,9 @@ function runImport() {
   Q.fcall(function(){})
     //.then(downloadSpreadsheet)
     .then(loadSpreadsheetData)
-    .then(popitCreatePersons)
-    .then(popitLoadPersons)
-    // .then(popitCreateOrganizations)
+    //.then(popitCreatePersons)
+    //.then(popitLoadPersons)
+    .then(popitCreateOrganizations)
     // .then(popitLoadOrganizations)
     // .then(popitCreateMemberships)
     .catch(function(err) {
