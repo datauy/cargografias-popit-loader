@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/dancalligaro/cargografias-popit-loader",
   "dependencies": {
+    "js-beautify": "^1.5.10",
     "popit-toolkit": "0.0.6",
     "q": "^1.3.0",
     "request": "^2.55.0"

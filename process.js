@@ -2,25 +2,32 @@ var Q = require('q');
 var PopitToolkit = require('popit-toolkit');
 var fs = require("fs");
 var request = require('request');
+var beautify = require('js-beautify').js_beautify;
 
 var config = null;
 var content; // = require("./cargos.json"); //Google spreadsheet exported as JSON
 var toolkit;
 
-function downloadData() {
+function downloadSpreadsheet() {
 
   var deferred = Q.defer();
 
   request(config.gsheetsUrl, function(error, response, body) {
     if (!error && response.statusCode == 200) {
-      fs.writeFileSync('cargos.json', body);
-      content = JSON.parse(body);
+      fs.writeFileSync('cargos.json',  beautify(body, { indent_size: 2 }));
       deferred.resolve();
     } else {
       deferred.reject("Error getting file")
     }
   })
 
+  return deferred.promise;
+}
+
+function loadSpreadsheetData() {
+  var deferred = Q.defer();
+  content = require('./cargos.json')
+  deferred.resolve();
   return deferred.promise;
 }
 
@@ -61,30 +68,49 @@ function importTerritorios() {
 
 }
 
-function postItemsPersonas() {
+function popitCreatePersons() {
 
   var deferred = Q.defer();
   var personas = {};
   var personasArr = [];
 
-  content.feed.entry.forEach(function(item) {
-    personas[item.gsx$nombre.$t + ' ' + item.gsx$apellido.$t] = (personas[item.gsx$nombre.$t + ' ' + item.gsx$apellido.$t] || 0) + 1;
+  content.feed.entry.forEach(function(item, ix) {
+
+    try{
+
+      var key = item.gsx$nombre.$t + ' ' + item.gsx$apellido.$t;
+      
+      if(!personas[key]){
+
+        personas[key] = 1; //de-duplicate
+
+        var persona = {
+          name: item.gsx$nombre.$t + ' ' + item.gsx$apellido.$t,
+          family_name: item.gsx$apellido.$t,
+          given_name: item.gsx$nombre.$t,
+          image: item.gsx$urlfoto.$t,
+          gender: item.gsx$sexo.$t
+        };
+
+        if( item.gsx$nrodedoc.$t ){
+          persona.identifiers = [{
+            identifier: item.gsx$nrodedoc.$t,
+            scheme: item.gsx$documentotipo.$t
+          }]
+        }
+
+        personasArr.push(persona);
+
+      }
+
+    }catch(ex){
+      console.log("Error importing Person")
+      console.log(ex.stack);
+    }
+
   });
 
-  for (persona in personas) {
-    personasArr.push(persona);
-  }
-  personasArr.sort();
-  console.log(personasArr)
-  console.log(personasArr.length)
-
-  var personasArr2 = personasArr.map(function(p) {
-    return {
-      name: p
-    };
-  });
-
-  toolkit.postItems('persons', personasArr2).then(
+  toolkit.postItems('persons', personasArr).then(
     function() {
       console.log("done");
       deferred.resolve();
@@ -300,12 +326,12 @@ function transformDateStr(input) {
 }
 
 
-function loadAllPersonas() {
+function popitLoadPersons() {
 
   return Q.Promise(function(resolve, reject, notify) {
     toolkit.loadAllItems('persons').then(function(personas) {
       var p = JSON.stringify(personas);
-      fs.writeFileSync('persons.json', p);
+      fs.writeFileSync('persons.json', beautify(p, { indent_size: 2 }));
       console.log('total personas', personas.length)
       resolve();
     }, function(err) {
@@ -493,14 +519,14 @@ function runProgram(argv) {
 
 function runImport() {
 
-  Q.fcall(downloadData)
-    .then(importTerritorios)
-    .then(postItemsPersonas)
-    .then(loadAllOrganizations)
-    .then(postItemsPosts)
-    .then(loadAllPosts)
-    .then(loadAllPersonas)
-    .then(postItemsMemberships)
+  Q.fcall(function(){})
+    //.then(downloadSpreadsheet)
+    .then(loadSpreadsheetData)
+    .then(popitCreatePersons)
+    .then(popitLoadPersons)
+    // .then(popitCreateOrganizations)
+    // .then(popitLoadOrganizations)
+    // .then(popitCreateMemberships)
     .catch(function(err) {
       console.log("Something went wrong");
       throw err;
@@ -511,14 +537,12 @@ function runImport() {
 
 function runDelete() {
 
-  Q.fcall(loadAllMemberships)
-    .then(deleteMemberships)
-    .then(loadAllPosts)
-    .then(deletePosts)
-    .then(loadAllPersonas)
-    .then(deletePersonas)
-    .then(loadAllOrganizations)
-    .then(deleteOrganizations)
+  Q.fcall(popitLoadMemberships)
+    .then(popitDeleteMemberships)
+    .then(popitLoadOrganizations)
+    .then(popitDeleteOrganizations)
+    .then(popitLoadPersons)
+    .then(popitDeletePersons)
     .catch(function(err) {
       console.log("Something went wrong");
       throw err;
