@@ -410,7 +410,7 @@ function popitDeleteMemberships() {
   );
 }
 
-function cloudPost(photoUrl) {
+function cloudPost(public_id, photoUrl) {
 
   return Q.Promise(function(resolve, reject, notify) {
 
@@ -421,7 +421,8 @@ function cloudPost(photoUrl) {
     var params = {
       timestamp: unixTimeInSeconds,
       format: "jpg",
-      transformation: "w_200,h_200,c_thumb,g_face"
+      transformation: "w_200,h_200,c_thumb,g_face",
+      public_id: public_id
     }
 
     var signItems = []
@@ -496,7 +497,8 @@ function updatePerson(person) {
 
 function createCloudinaryImageForPerson(person) {
   return Q.Promise(function(resolve, reject, notify) {
-    cloudPost(person.image)
+    var public_id = config.host.match(/^(.*?)\./)[1] + "/" + person.id;
+    cloudPost(public_id, person.image)
       .then(function(result) {
 
         person.image_original = person.image;
