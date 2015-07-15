@@ -418,6 +418,11 @@ function cloudPost(public_id, photoUrl) {
     var apikey = config.cloudinary_apikey
     var secret = config.cloudinary_secret
 
+    // These are the values tha need to be signed:
+    // callback, eager, format, public_id, tags, timestamp, transformation, type
+    // Anything else should be added later, after calculating the signature.
+    // http://cloudinary.com/documentation/upload_images#request_authentication
+
     var params = {
       timestamp: unixTimeInSeconds,
       format: "jpg",
