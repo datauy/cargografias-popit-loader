@@ -3,6 +3,7 @@ var PopitToolkit = require('popit-toolkit');
 var fs = require("fs");
 var request = require('request');
 var beautify = require('js-beautify').js_beautify;
+var crypto = require('crypto');
 
 var config = null;
 var content; // = require("./cargos.json"); //Google spreadsheet exported as JSON
@@ -401,10 +402,159 @@ function popitDeleteMemberships() {
   );
 }
 
+function cloudPost(photoUrl){
+
+  return Q.Promise(function(resolve, reject, notify) {
+
+    var unixTimeInSeconds = Math.floor(Date.now() / 1000);
+    var apikey = config.cloudinary_apikey
+    var secret = config.cloudinary_secret
+    
+    var params = {
+      timestamp: unixTimeInSeconds, 
+      format: "jpg",
+      transformation: "w_200,h_200,c_thumb,g_face"
+    }
+
+    var signItems = []
+    Object.keys(params).sort().forEach(function(key){
+      signItems.push( key + '=' + params[key])
+    })
+    var signString = signItems.join('&') + secret;
+    var signature = crypto.createHash('sha1').update( signString ).digest('hex')
+
+    //not signing params:
+    params.file = photoUrl;
+    params.signature = signature;
+    params.api_key = apikey;
+
+    var reqOpts = {
+      method: "POST",
+      url: config.cloudinary_uploadurl,
+      json: true,
+      body: params
+    };
+
+    request(reqOpts, function(err, response, body){
+      if(err){
+        reject({
+          err: err,
+          response: response,
+          body: body
+        })
+      }else{
+        if(body.error){
+          reject({
+            err: body.error, 
+            body: body
+          })
+        }else{
+          resolve(body)
+        }
+      }
+    })
+
+  }); 
+
+}
+
+function updatePerson(person){
+
+  return Q.promise(function(resolve, reject, notify){
+
+    var url = "https://" + config.host + "/api/v0.1/persons/" + person.id;
+
+    var options = {
+      url: url,
+      method: 'PUT',
+      body: person,
+      json: true,
+      headers: {
+        'Apikey': config.Apikey
+      }
+    }
+
+    request(options, function(err, httpResponse, body) {
+      if (err) {
+        console.log(err)
+        reject(err);
+      } else {
+        resolve(body);
+      }
+    })
+
+  });
+}
+
+function createCloudinaryImageForPerson(person){
+  return Q.Promise(function(resolve, reject, notify) {
+    cloudPost(person.image)
+    .then(function(result){
+
+      person.image_original = person.image;
+      person.image = result.secure_url;
+      delete person.images;
+
+      updatePerson(person)
+      .then(function(result){
+        console.log('completed', person.name)
+        resolve(result)
+      })
+      .catch(function(err){
+        console.log("error updating person", person, err)
+        reject({ message: "error updating person", person: person, err: err});
+      })
+
+    })
+    .catch(function(err){
+      console.log("error creating cloudinary", person, err)
+      reject({ message: "error creating cloudinary", person:person, err: err});
+    });
+  });
+}
+
+function popitUpdateCloudinary(){
+
+  var cloudRE = /^(?:http\:|https\:|)\/\/res\.cloudinary\.com/
+  return Q.Promise(function(resolve, reject, notify) {
+    var persons = require('./data/persons.json');
+    var promises = [];
+
+    persons.forEach(function(person){
+      if(person.image && !cloudRE.test(person.image)){
+        promises.push(createCloudinaryImageForPerson(person));
+      }
+    })
+
+    console.log("Total Persons:", persons.length)
+    console.log('   To Process:', promises.length);
+    var completed = 0;
+    var errored = 0;
+
+    Q.allSettled(promises)
+    .then(function (results) {
+        results.forEach(function (result) {
+            if (result.state === "fulfilled") {
+              completed ++;
+                //var value = result.value;
+            } else {
+              errored++;
+                var reason = result.reason;
+            }
+        });
+        console.log("  Completed:", completed);
+        console.log("  Errored:", errored);
+        resolve();
+    });
+    
+  });
+
+}
+
 function runProgram(argv) {
 
   if (argv.length != 4) {
-    console.log("Usage: node process.js [import|delete] [instanceName]")
+    console.log("Usage: node process.js [import|delete|updatephotos] [instanceName]")
   } else {
 
     var action = argv[2];
@@ -418,15 +568,17 @@ function runProgram(argv) {
       Apikey: config.Apikey
     });
 
-    if (["import", "delete"].indexOf(action) == -1) {
+    if (["import", "delete", "updatephotos"].indexOf(action) == -1) {
       console.log("Invalid action " + action);
       return;
     }
 
-    if (action == "import") {
+    if ("import" == action) {
       runImport();
-    } else if (action = "delete") {
+    } else if ("delete" == action) {
       runDelete();
+    } else if ("updatephotos" == action) {
+      runUpdatePhotos();
     }
 
   }
@@ -469,5 +621,19 @@ function runDelete() {
     .done();
 
 }
+
+function runUpdatePhotos() {
+
+  Q.fcall(function(){})
+    .then(popitLoadPersons)
+    .then(popitUpdateCloudinary)
+    .catch(function(err) {
+      console.log("Something went wrong");
+      throw err;
+    })
+    .done();
+
+}
+
 
 runProgram(process.argv);
