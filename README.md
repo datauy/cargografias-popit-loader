@@ -17,7 +17,7 @@ Sample config.json
 ------------------
 ```json
 {
-    "host": "<INSTANCE_NAME>.popit.mysociety.org",
+    "host": "<INSTANCE_NAME>.<POPIT_URL>",
     "Apikey": "YOUR API KEY", 
     "gsheetsUrl": "https://spreadsheets.google.com/feeds/list/<SPREADSHEET_ID>/<SHEET_ID>/public/values?alt=json"
 }
