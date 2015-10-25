@@ -3,21 +3,27 @@ cargografias-popit-loader
 
 This is used to populate the cargografias popit instance from a google spreadsheet exported as json
 
+1) Install node
+`sudo apt-get install npm`
 
-1) Install Dependencies
+2) Install Dependencies
 `npm install`
 
-2) Add a config json in the `config` folder named `<instanceName>.json`
+3) Create a json config file (see config json example at final of this README) and put in config folder. Name it: `<instanceName>.json`
 
-3) To execute it
+4) To execute it
 `node process.js <instanceName>`
 
+4b) In debian:
+`nodejs process.js <instanceName>`
 
-Sample config.json
+5) With command before, you will see help file, that includes delete and import commands
+
+Sample config json
 ------------------
 ```json
 {
-    "host": "<INSTANCE_NAME>.popit.mysociety.org",
+    "host": "<INSTANCE_NAME>.<POPIT_URL>",
     "Apikey": "YOUR API KEY", 
     "gsheetsUrl": "https://spreadsheets.google.com/feeds/list/<SPREADSHEET_ID>/<SHEET_ID>/public/values?alt=json"
 }
