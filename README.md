@@ -51,16 +51,27 @@ Where
 INSTANCE_NAME
 ================
 
+Name of your popit instance.
+
 POPIT_URL
 ================
+
+Url for the popit server
 
 API_KEY
 ================
 
+ApiKey given by popit to access the api
+
+
+
 SPREADSHEET_ID
 ================
 
+Google Spreasheet ID, that might look like "1qKk_stiteudp5alMuOEyyLoU5YLvB1iJMi8eIAtToXw"
+Like https://spreadsheets.google.com/feeds/list/1qKk_stiteudp5alMuOEyyLoU5YLvB1iJMi8eIAtToXw/od6/public/values?alt=json
 SHEET_ID
 ================
-
+Number of the Spreadsheet, that might look like  "od6"
+like https://spreadsheets.google.com/feeds/list/1qKk_stiteudp5alMuOEyyLoU5YLvB1iJMi8eIAtToXw/od6/public/values?alt=json
 
