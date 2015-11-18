@@ -12,12 +12,29 @@ This is used to populate the cargografias popit instance from a google spreadshe
 3) Create a json config file (see config json example at final of this README) and put in config folder. Name it: `<instanceName>.json`
 
 4) To execute it
-`node process.js <instanceName>`
+`node process.js node process.js <command> <instanceName>`
 
 4b) In debian:
 `nodejs process.js <instanceName>`
 
-5) With command before, you will see help file, that includes delete and import commands
+Available commands
+------------
+
+Import
+====
+Imports all the information from json. If you want to see the right format you must check Cargografias Protocol Document.
+
+Delete
+===
+Removes all the entitites from the database:
+- Memberships
+- Organizations
+- Persons
+
+updatephotos
+===
+Makes an upload for all the photos to a propper server.
+
 
 Sample config json
 ------------------
@@ -28,3 +45,22 @@ Sample config json
     "gsheetsUrl": "https://spreadsheets.google.com/feeds/list/<SPREADSHEET_ID>/<SHEET_ID>/public/values?alt=json"
 }
 ```
+
+Where
+
+INSTANCE_NAME
+================
+
+POPIT_URL
+================
+
+API_KEY
+================
+
+SPREADSHEET_ID
+================
+
+SHEET_ID
+================
+
+
